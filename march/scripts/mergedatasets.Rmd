@@ -1,0 +1,245 @@
+---
+title: "merging datasets"
+author: "Ginni"
+date: "2024-03-27"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r load packages}
+rm(list=ls())
+
+library(dplyr)
+library(Seurat)
+library(tidyr)
+library(here)
+library(scCustomize)
+library(scater)
+library(scran)
+library(tidyverse)
+library(patchwork)
+library(viridis)
+library(ggforce)
+library(gghalves)
+library(ggridges)
+library(scDblFinder)
+library(SingleR)
+```
+
+```{r read10x}
+here::here()
+```
+```{r read10X}
+here() %>% dirname()
+multi_10X_bm= Read10X_Multi_Directory(base_path = "/Volumes/lab-papayannopoulosv/inputs/babs/ginni.khurana/asf/SC23386/231220_A01366_0498_BH2CWNDSXC/cellranger-count/KHU6625A1/outs/per_sample_outs" , default_10X= FALSE, secondary= "count/sample_filtered_feature_bc_matrix" )
+
+multi_10X_bld= Read10X_Multi_Directory(base_path = "/Volumes/lab-papayannopoulosv/inputs/babs/ginni.khurana/asf/SC23386/231220_A01366_0498_BH2CWNDSXC/cellranger-count/KHU6625A2/outs/per_sample_outs" , default_10X= FALSE, secondary= "count/sample_filtered_feature_bc_matrix")
+```
+
+```{r define color pallete eval=FALSE}
+custom_colors <- list()
+
+colors_dutch <- c(
+  '#FFC312','#C4E538','#12CBC4','#FDA7DF','#ED4C67',
+  '#F79F1F','#A3CB38','#1289A7','#D980FA','#B53471',
+  '#EE5A24','#009432','#0652DD','#9980FA','#833471',
+  '#EA2027','#006266','#1B1464','#5758BB','#6F1E51'
+)
+
+colors_spanish <- c(
+  '#40407a','#706fd3','#f7f1e3','#34ace0','#33d9b2',
+  '#2c2c54','#474787','#aaa69d','#227093','#218c74',
+  '#ff5252','#ff793f','#d1ccc0','#ffb142','#ffda79',
+  '#b33939','#cd6133','#84817a','#cc8e35','#ccae62'
+)
+
+custom_colors$discrete <- c(colors_dutch, colors_spanish)
+
+custom_colors$cell_cycle <- setNames(
+  c('#45aaf2', '#f1c40f', '#e74c3c', '#7f8c8d'),
+  c('G1',      'S',       'G2M',     '-')
+)
+```
+
+```{r check if count matrix have same gene names}
+sameGeneNames <- function(multi_10X_bm) {
+
+  ## create place holder for gene names from each count matrix
+  gene_names <- list()
+
+  ## go through count matrices
+  for ( i in names(multi_10X_bm) ) {
+
+    ## extract gene names
+    gene_names[[i]] <- rownames(multi_10X_bm[[i]])
+  }
+
+  ## check if all gene names are the same (using the first matrix as a reference
+  ## for the others)
+  return(all(sapply(gene_names, FUN = identical, gene_names[[1]])))
+}
+```
+
+
+```{r for loop for creating seurat object}
+names(multi_10X_bm)
+pdf(here("march", "plots", "preprocessingqcmetricsbm.pdf"), height= 10, width=10)
+samplesummary= tibble()
+for(x in seq_along(multi_10X_bm))
+{
+  
+  a= paste0(names(multi_10X_bm[x]))
+  b="null"
+b= case_when(grepl("bm_hmgn12dko", a) ~ "bm_hmgn12ko" , 
+             grepl("blood", a) ~ a ,
+grepl("bm_hmgn2ko", a)~ "bm_hmgn2ko", 
+grepl("bm_hmgn1ko", a)~"bm_hmgn1ko",
+grepl("bm_hmgn1ko", a) ~"bm_hmgn1ko",
+grepl("bm_wt", a)~"bm_wt")
+b= as.character(b)
+ object= CreateSeuratObject(multi_10X_bm[x], project= b, min.cells = 10, min.features = 200)
+ object@meta.data$id= paste0(a, "1")
+ object= PercentageFeatureSet(object, pattern="^mt-", col.name = "percent.mt")
+ p1=RidgePlot(object, features=c("nFeature_RNA","nCount_RNA", "percent.mt"), log=T, ncol = 1) + scale_y_discrete(labels= a)
+ print(p1)
+object= subset(object, subset = nFeature_RNA<4000 & nCount_RNA<20000 & percent.mt<10)
+p2=RidgePlot(object, features=c("nFeature_RNA","nCount_RNA", "percent.mt"), log=T, ncol = 1) + scale_y_discrete(labels= a)
+print(p2)
+object@meta.data$batch= "1"
+  object_name= paste(a)
+  assign(object_name, object)
+}
+dev.off()
+```
+
+```{r make seurat objects from blood}
+names(multi_10X_bld)
+pdf(here("march", "plots", "preprocessingqcmetricsblood.pdf"), height= 10, width=10)
+for(x in seq_along(multi_10X_bld))
+{
+  
+print(x)
+a= paste0(names(multi_10X_bld[x]))
+
+b="null"
+b= case_when(grepl("bm_hmgn12dko", a) ~ "bm_hmgn12ko" , 
+grepl("bm_hmgn2ko", a)~ "bm_hmgn2ko", 
+grepl("bm_hmgn1ko", a)~"bm_hmgn1ko",
+grepl("bm_hmgn1ko", a) ~"bm_hmgn1ko",
+grepl("bm_wt", a)~"bm_wt",
+grepl("blood_hmgn12dko", a) ~ "blood_hmgn12ko" , 
+grepl("blood_hmgn2ko", a)~ "blood_hmgn2ko", 
+grepl("blood_hmgn1ko", a)~"blood_hmgn1ko",
+grepl("blood_hmgn1ko", a) ~"blood_hmgn1ko",
+grepl("blood_wt", a)~"blood_wt")
+b= as.character(b)
+
+  print(a)
+ object= CreateSeuratObject(multi_10X_bld[x], project= b, min.cells = 10, min.features = 200 )
+ object@meta.data$id= paste0(a, "2")
+ object= PercentageFeatureSet(object, pattern="^mt-", col.name = "percent.mt")
+p1=RidgePlot(object, features=c("nFeature_RNA","nCount_RNA", "percent.mt"), log=T, ncol = 1) + scale_y_discrete(labels= a)
+print(p1)
+object= subset(object, subset = nFeature_RNA<4000 & nCount_RNA<20000 & percent.mt<10)
+p2=RidgePlot(object, features=c("nFeature_RNA","nCount_RNA", "percent.mt"), log=T, ncol = 1) + scale_y_discrete(labels= a)
+print(p2)
+object@meta.data$batch= "2"
+  object_name= paste(a)
+ 
+  object_name= case_when(grepl("bm", a)~ paste0(object_name, "_rep"),
+                        grepl("blood", a)~object_name )
+  assign(object_name, object)
+}
+dev.off()
+```
+```{r make blood and bm list}
+rm(multi_10X_bld, multi_10X_bm, object)
+```
+
+```{r}
+blood.list= c( blood_hmgn12dko_a,blood_hmgn12dko_b, blood_hmgn12dko_c, blood_hmgn1ko_a, blood_hmgn1ko_b, blood_hmgn1ko_c, blood_hmgn2ko_a, blood_hmgn2ko_b, blood_hmgn2ko_c, blood_wt_b, blood_wt_c)
+bm.list= c( bm_hmgn12dko_a,bm_hmgn12dko_b, bm_hmgn12dko_c, bm_hmgn1ko_a, bm_hmgn1ko_b, bm_hmgn1ko_c, bm_hmgn2ko_a, bm_hmgn2ko_b, bm_hmgn2ko_c, bm_wt_b, bm_wt_c, bm_hmgn12dko_a_rep, bm_hmgn2ko_a_rep, bm_hmgn2ko_b_rep, bm_hmgn2ko_c_rep)
+```
+
+```{r remove files}
+rm(blood_hmgn12dko_a,blood_hmgn12dko_b, blood_hmgn12dko_c, blood_hmgn1ko_a, blood_hmgn1ko_b, blood_hmgn1ko_c, blood_hmgn2ko_a, blood_hmgn2ko_b, blood_hmgn2ko_c,  blood_wt_b, blood_wt_c)
+rm(bm_hmgn12dko_a,bm_hmgn12dko_b, bm_hmgn12dko_c, bm_hmgn1ko_a, bm_hmgn1ko_b, bm_hmgn1ko_c, bm_hmgn2ko_a, bm_hmgn2ko_b, bm_hmgn2ko_c,  bm_wt_b, bm_wt_c, bm_hmgn12dko_a_rep, bm_hmgn2ko_a_rep, bm_hmgn2ko_b_rep, bm_hmgn2ko_c_rep)
+```
+
+```{r merge datasets bm}
+bm_merge= merge(bm_wt_a, y=bm.list )
+bm_merge[["RNA"]]= JoinLayers(bm_merge[["RNA"]])
+saveRDS(bm_merge, here("march", "objects","bm_merge.RDS"))
+
+bld_merge= merge(blood_wt_a, y=blood.list )
+bld_merge[["RNA"]]= JoinLayers(bld_merge[["RNA"]])
+saveRDS(bld_merge, here("march", "objects", "bld_merge.RDS"))
+
+
+
+
+```
+bm_merge <- NormalizeData(bm_merge, normalization.method = "LogNormalize", scale.factor = 10000)
+all.genes <- rownames(bm_merge)
+bm_merge= ScaleData(bm_merge, features = all.genes, verbose = FALSE)
+bm_merge <- FindVariableFeatures(bm_merge, selection.method = "vst", nfeatures = 20)
+bm_merge <- RunPCA(bm_merge)
+bm_merge <- FindNeighbors(bm_merge, dims = 1:10)
+bm_merge <- FindClusters(bm_merge, resolution = 0.5)
+
+```{r merge datasets bm_hmgn2ko_a eval=FALSE}
+bm_merge= merge(bm_hmgn2ko_a_1, y= bm_hmgn2ko_a_2, add.cell.ids= c("1", "2"), project= "bm_hmgn2ko_12")
+bm_merge=PercentageFeatureSet(bm_merge, pattern="^mt-", col.name = "percent.mt")
+VlnPlot(bm_merge, features= c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol=3)
+
+bm_merge <- NormalizeData(bm_merge, normalization.method = "LogNormalize", scale.factor = 10000)
+all.genes <- rownames(bm_merge)
+bm_merge= ScaleData(bm_merge, features = all.genes, verbose = FALSE)
+bm_merge <- FindVariableFeatures(bm_merge, selection.method = "vst", nfeatures = 20)
+bm_merge <- RunPCA(bm_merge)
+bm_merge <- FindNeighbors(bm_merge, dims = 1:10)
+bm_merge <- FindClusters(bm_merge, resolution = 0.5)
+
+
+bm_merge <- RunUMAP(bm_merge, dims = 1:10)
+DimPlot(bm_merge, reduction ="umap", group.by = "orig.ident" )
+```
+
+```{r after filtering eval=FALSE}
+bm_merge= merge(bm_hmgn2ko_a_1, y= bm_hmgn2ko_a_2, add.cell.ids= c("1", "2"), project= "bm_hmgn2ko_12")
+bm_merge=PercentageFeatureSet(bm_merge, pattern="^mt-", col.name = "percent.mt")
+VlnPlot(bm_merge, features= c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol=3)
+bm_merge= subset(bm_merge, subset = nFeature_RNA<4000 & nCount_RNA<20000 & percent.mt<10)
+
+bm_merge <- NormalizeData(bm_merge, normalization.method = "LogNormalize", scale.factor = 10000)
+all.genes <- rownames(bm_merge)
+bm_merge= ScaleData(bm_merge, features = all.genes, verbose = FALSE)
+bm_merge <- FindVariableFeatures(bm_merge, selection.method = "vst", nfeatures = 20)
+bm_merge <- RunPCA(bm_merge)
+bm_merge <- FindNeighbors(bm_merge, dims = 1:10)
+bm_merge <- FindClusters(bm_merge, resolution = 0.5)
+
+bm_merge <- RunUMAP(bm_merge, dims = 1:10)
+DimPlot(bm_merge, reduction ="umap", group.by = "orig.ident" )
+
+```
+
+```{r merge datasets bm_hmgn2ko_a eval=FALSE}
+
+mt.keep= !(isOutlier(bm_merge$percent.mt, nmads=3, type="higher")) #SCATER
+table(mt.keep)
+VlnPlot(bm_merge, features= c("nFeature_RNA", "nCount_RNA", "mt.keep"), ncol=3)
+bm_merge <- NormalizeData(bm_merge, normalization.method = "LogNormalize", scale.factor = 10000)
+all.genes <- rownames(bm_merge)
+bm_merge= ScaleData(bm_merge, features = all.genes, verbose = FALSE)
+bm_merge <- FindVariableFeatures(bm_merge, selection.method = "vst", nfeatures = 20)
+bm_merge <- RunPCA(bm_merge)
+bm_merge <- FindNeighbors(bm_merge, dims = 1:10)
+bm_merge <- FindClusters(bm_merge, resolution = 0.5)
+bm_merge <- RunUMAP(bm_merge, dims = 1:10)
+DimPlot(bm_merge, reduction ="umap", group.by = "orig.ident" )
+```

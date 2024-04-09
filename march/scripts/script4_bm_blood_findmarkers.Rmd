@@ -1,0 +1,441 @@
+---
+title: "script4_bm-bloodneutrophils-findmarker"
+output: html_document
+date: "2024-04-05"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r eval=FALSE}
+#trying to install presto ( didn't work)
+renv::install("devtools")
+usethis::create_github_token()
+usethis::edit_r_environ()
+```
+
+
+```{r load packages}
+rm(list=ls())
+renv::settings$snapshot.type("all")
+options(bitmapType='cairo')
+here::here()
+library(dplyr)
+library(Seurat)
+library(tidyr)
+library(here)
+library(scCustomize)
+library(scater)
+library(scran)
+library(tidyverse)
+library(patchwork)
+library(viridis)
+library(ggforce)
+library(gghalves)
+library(ggridges)
+library(future)
+library(SingleR)
+library(glmGamPoi)
+library(sctransform)
+library(EnhancedVolcano)
+```
+
+```{r }
+plan()
+plan("multicore", workers = 4)
+plan()
+```
+
+```{r}
+bm_merge= readRDS(here("march", "objects", "script3-bm_merge_incsinglrlabels_allcelltypes.rds"))
+
+```
+
+```{r iterate over celltypes}
+#get celltypes list
+celltypes= bm_merge@meta.data$singlr_labels
+celltypes= unique(celltypes)
+celltypes= as.list(celltypes)
+
+#loop over multiple celltypes
+for (i in seq_along(celltypes))
+{
+cluster= print(celltypes[i])
+  
+object= subset(bm_merge,singlr_labels==cluster )
+object$genotype= paste(object$singlr_labels, object$orig.ident, sep=" ")
+Idents(object)= "genotype"
+object <- PrepSCTFindMarkers(object)
+options(future.globals.maxSize=8000* 1024^3) 
+
+genotypes= (object@meta.data$genotype)
+genotypes= unique(genotypes)
+genotypes
+genotypes= as.list(genotypes)
+
+here::here()
+pdf(here("march", "plots","findmarkers", paste0("findmarkerplots_bm_", cluster, ".pdf")), height= 20, width=20)
+for(i in 2:4)
+
+{
+ 
+   wt= print(genotypes[1])
+ currentgenotype= print(genotypes[i])
+  currentgenotype= as.vector(unlist(currentgenotype))
+  tryCatch({
+  markers= FindMarkers(object, ident.1 = currentgenotype, ident.2 = wt, verbose = FALSE, assay = "SCT", recorrect_umi = FALSE)
+
+ p1= EnhancedVolcano(markers,
+                rownames(markers),
+                x ="avg_log2FC", 
+                y ="p_val_adj", 
+                title= paste0(currentgenotype, "vs_bm_wt"),
+                pointSize = 4.0,
+                labSize = 6.0,
+                labCol = 'black',
+                labFace = 'bold',
+                boxedLabels = TRUE,
+                colAlpha = 4/5,
+                legendPosition = 'right',
+                legendLabSize = 14,
+                legendIconSize = 4.0,
+                drawConnectors = TRUE,
+                widthConnectors = 1.0,
+                colConnectors = 'black')
+ print(p1)
+
+ write.csv(markers, here("march", "plots","findmarkers",  paste0(currentgenotype, "vs_bm_wt.csv")), row.names = TRUE)
+  }
+, error = function(e) {
+    print(paste("Error occurred:", e))
+    return(NULL)
+
+  })
+
+}
+ dev.off()
+}
+
+```
+
+```{r bm_subset wtb iterate over subset without wt_b}
+bm_merge1= subset(bm_merge, id != "bm_wt_b1")
+celltypes= bm_merge1@meta.data$singlr_labels
+celltypes= unique(celltypes)
+celltypes= as.list(celltypes)
+
+#loop over multiple celltypes
+for (i in seq_along(celltypes))
+{
+cluster= print(celltypes[i])
+  
+object= subset(bm_merge1,singlr_labels==cluster )
+object$genotype= paste(object$singlr_labels, object$orig.ident, sep=" ")
+Idents(object)= "genotype"
+object <- PrepSCTFindMarkers(object)
+options(future.globals.maxSize=8000* 1024^3) 
+
+genotypes= (object@meta.data$genotype)
+genotypes= unique(genotypes)
+genotypes
+genotypes= as.list(genotypes)
+
+here::here()
+pdf(here("march", "plots","findmarkers","subset_excwtb", paste0("findmarkerplots_excwtb_bm_", cluster, ".pdf")), height= 20, width=20)
+for(i in 2:4)
+
+{
+ 
+   wt= print(genotypes[1])
+ currentgenotype= print(genotypes[i])
+  currentgenotype= as.vector(unlist(currentgenotype))
+  tryCatch({
+  markers= FindMarkers(object, ident.1 = currentgenotype, ident.2 = wt, verbose = FALSE, assay = "SCT", recorrect_umi = FALSE)
+
+ p1= EnhancedVolcano(markers,
+                rownames(markers),
+                x ="avg_log2FC", 
+                y ="p_val_adj", 
+                title= paste0(currentgenotype, "vs_bm_wt_exc_wtb"),
+                pointSize = 4.0,
+                labSize = 6.0,
+                labCol = 'black',
+                labFace = 'bold',
+                boxedLabels = TRUE,
+                colAlpha = 4/5,
+                legendPosition = 'right',
+                legendLabSize = 14,
+                legendIconSize = 4.0,
+                drawConnectors = TRUE,
+                widthConnectors = 1.0,
+                colConnectors = 'black')
+ print(p1)
+
+ write.csv(markers, here("march", "plots","findmarkers", "subset_excwtb", paste0(currentgenotype, "vs_bm_wt_excwtb.csv")), row.names = TRUE)
+  }
+, error = function(e) {
+    print(paste("Error occurred:", e))
+    return(NULL)
+
+  })
+
+}
+ dev.off()
+}
+
+```
+
+```{r}
+bld_merge= readRDS(here("march", "objects", "script3-bld_merge_incsinglrlabels_allcelltypes.rds"))
+```
+
+
+```{r iterate over celltypes blood}
+#get celltypes list
+celltypes= bld_merge@meta.data$singlr_labels
+celltypes= unique(celltypes)
+celltypes= as.list(celltypes)
+
+#loop over multiple celltypes
+for (i in seq_along(celltypes))
+{
+cluster= print(celltypes[i])
+  
+object= subset(bld_merge,singlr_labels==cluster )
+object$genotype= paste(object$singlr_labels, object$orig.ident, sep=" ")
+Idents(object)= "genotype"
+object <- PrepSCTFindMarkers(object)
+options(future.globals.maxSize=8000* 1024^3) 
+
+genotypes= (object@meta.data$genotype)
+genotypes= unique(genotypes)
+genotypes
+genotypes= as.list(genotypes)
+
+here::here()
+pdf(here("march", "plots","findmarkers", "blood" paste0("findmarkerplots_bld_", cluster, ".pdf")), height= 20, width=20)
+for(i in 2:4)
+
+{
+ 
+   wt= print(genotypes[1])
+ currentgenotype= print(genotypes[i])
+  currentgenotype= as.vector(unlist(currentgenotype))
+  tryCatch({
+  markers= FindMarkers(object, ident.1 = currentgenotype, ident.2 = wt, verbose = FALSE, assay = "SCT", recorrect_umi = FALSE)
+
+ p1= EnhancedVolcano(markers,
+                rownames(markers),
+                x ="avg_log2FC", 
+                y ="p_val_adj", 
+                title= paste0(currentgenotype, "vs_bld_wt"),
+                pointSize = 4.0,
+                labSize = 6.0,
+                labCol = 'black',
+                labFace = 'bold',
+                boxedLabels = TRUE,
+                colAlpha = 4/5,
+                legendPosition = 'right',
+                legendLabSize = 14,
+                legendIconSize = 4.0,
+                drawConnectors = TRUE,
+                widthConnectors = 1.0,
+                colConnectors = 'black')
+ print(p1)
+
+ write.csv(markers, here("march", "plots","findmarkers", "blood"  paste0(currentgenotype, "vs_bld_wt.csv")), row.names = TRUE)
+  }
+, error = function(e) {
+    print(paste("Error occurred:", e))
+    return(NULL)
+
+  })
+
+}
+ dev.off()
+}
+
+```
+
+```{r bld_subset wtb iterate over subset without wt_b}
+bld_merge1= subset(bld_merge, id != "bld_wt_b1")
+celltypes= bld_merge1@meta.data$singlr_labels
+celltypes= unique(celltypes)
+celltypes= as.list(celltypes)
+
+#loop over multiple celltypes
+for (i in seq_along(celltypes))
+{
+cluster= print(celltypes[i])
+  
+object= subset(bld_merge1,singlr_labels==cluster )
+object$genotype= paste(object$singlr_labels, object$orig.ident, sep=" ")
+Idents(object)= "genotype"
+object <- PrepSCTFindMarkers(object)
+options(future.globals.maxSize=8000* 1024^3) 
+
+genotypes= (object@meta.data$genotype)
+genotypes= unique(genotypes)
+genotypes
+genotypes= as.list(genotypes)
+
+here::here()
+pdf(here("march", "plots","findmarkers", "blood""subset_excwtb", paste0("findmarkerplots_exc_wtb_bld_", cluster, ".pdf")), height= 20, width=20)
+for(i in 2:4)
+
+{
+ 
+   wt= print(genotypes[1])
+ currentgenotype= print(genotypes[i])
+  currentgenotype= as.vector(unlist(currentgenotype))
+  tryCatch({
+  markers= FindMarkers(object, ident.1 = currentgenotype, ident.2 = wt, verbose = FALSE, assay = "SCT", recorrect_umi = FALSE)
+
+ p1= EnhancedVolcano(markers,
+                rownames(markers),
+                x ="avg_log2FC", 
+                y ="p_val_adj", 
+                title= paste0(currentgenotype, "vs_bld_wt_exc_wtb"),
+                pointSize = 4.0,
+                labSize = 6.0,
+                labCol = 'black',
+                labFace = 'bold',
+                boxedLabels = TRUE,
+                colAlpha = 4/5,
+                legendPosition = 'right',
+                legendLabSize = 14,
+                legendIconSize = 4.0,
+                drawConnectors = TRUE,
+                widthConnectors = 1.0,
+                colConnectors = 'black')
+ print(p1)
+
+ write.csv(markers, here("march", "plots","findmarkers", "blood" "subset_excwtb", paste0(currentgenotype, "vs_bld_wt_excwtb.csv")), row.names = TRUE)
+  }
+, error = function(e) {
+    print(paste("Error occurred:", e))
+    return(NULL)
+
+  })
+
+}
+ dev.off()
+}
+
+```
+
+
+
+
+
+
+
+```{r clean up bm data eval=FALSE}
+bm_neut= subset(bm_merge, singlr_labels== "Neutrophils")
+bm_neut$genotype= paste(bm_neut$singlr_labels, bm_neut$orig.ident, sep=" ")
+Idents(bm_neut)= "genotype"
+unique(bm_neut@meta.data$genotype)
+bm_neut <- PrepSCTFindMarkers(bm_neut)
+options(future.globals.maxSize=8000* 1024^3 )
+
+bm_neutsubset= subset(bm_neut, id != "bm_wt_b1")
+unique(bm_neutsubset@meta.data$id)
+```
+
+```{r automate findmarkers eval=FALSE}
+genotypes= (bm_neut@meta.data$genotype)
+genotypes= unique(genotypes)
+genotypes
+genotypes= as.list(genotypes)
+```
+
+```{r iterate findmarkers eval=FALSE}
+here::here()
+pdf(here("march", "plots", "findmarkerplots_bm_neut.pdf"), height= 20, width=20)
+for(i in 2:4)
+  
+{
+  a= print(genotypes[i])
+  a= as.vector(unlist(a))
+  object= FindMarkers(bm_neut, ident.1 = a, ident.2 ="Neutrophils bm_wt", verbose = FALSE, assay= "SCT", recorrect_umi = FALSE )
+ p1= EnhancedVolcano(object, 
+                rownames(object),
+                x ="avg_log2FC", 
+                y ="p_val_adj", 
+                title= paste0(a, "vs_bm_wt"))
+ print(p1)
+ write.csv(object, here("march", "plots", paste0(a, "vs_bm_wt.csv")), row.names = TRUE)
+}
+```
+
+```{r iterate findmarkers excwtb eval=FALSE}
+here::here()
+pdf(here("march", "plots", "findmarkerplots_excwt_b_bm_neut.pdf"), height= 20, width=20)
+for(i in 2:4)
+  
+{
+  a= print(genotypes[i])
+  a= as.vector(unlist(a))
+  object= FindMarkers(bm_neutsubset, ident.1 = a, ident.2 ="Neutrophils bm_wt", verbose = FALSE, assay= "SCT", recorrect_umi = FALSE )
+ p1= EnhancedVolcano(object, 
+                rownames(object),
+                x ="avg_log2FC", 
+                y ="p_val_adj", 
+                title= paste0(a, "vs_bm_wt"))
+ print(p1)
+ write.csv(object, here("march", "plots", paste0(a, "vs_bm_wt__excwtb.csv")), row.names = TRUE)
+}
+```
+```{r neut 2ko vs wt eval=FALSE }
+
+neut_12kovswt= FindMarkers(bm_neut, ident.1 = "Neutrophils bm_hmgn12ko", ident.2 ="Neutrophils bm_wt", verbose = FALSE, assay= "SCT", recorrect_umi = FALSE )
+EnhancedVolcano(neut_12kovswt, 
+                rownames(neut_12kovswt),
+                x ="avg_log2FC", 
+                y ="p_val_adj")
+write_csv(neut_12kovswt, here("march", "plots", "neut__hmgn12kovswt.csv"))
+
+neut2_12kovswt= FindMarkers(bm_neutsubset, ident.1 = "Neutrophils bm_hmgn12ko", ident.2 ="Neutrophils bm_wt", verbose = FALSE, assay= "SCT", recorrect_umi = FALSE )
+EnhancedVolcano(neut2_12kovswt, 
+                rownames(neut2_12kovswt),
+                x ="avg_log2FC", 
+                y ="p_val_adj")
+write_csv(neut2_12kovswt, here("march", "plots", "neut_excwtb_hmgn12kovswt.csv"))
+```
+
+```{r neutrophils 2ko vs wt eval=FALSE}
+neut_2kovswt= FindMarkers(bm_neut, ident.1 = "Neutrophils bm_hmgn2ko", ident.2 ="Neutrophils bm_wt", verbose = FALSE, assay= "SCT", recorrect_umi = FALSE )
+EnhancedVolcano(neut_2kovswt, 
+                rownames(neut_2kovswt),
+                x ="avg_log2FC", 
+                y ="p_val_adj")
+write_csv(neut_2kovswt, here("march", "plots", "neut__hmgn2kovswt.csv"))
+```
+
+```{r eval=FALSE}
+
+neut2_2kovswt= FindMarkers(bm_neutsubset, ident.1 = "Neutrophils bm_hmgn2ko", ident.2 ="Neutrophils bm_wt", verbose = FALSE, assay= "SCT", recorrect_umi = FALSE )
+EnhancedVolcano(neut2_2kovswt, 
+                rownames(neut2_2kovswt),
+                x ="avg_log2FC", 
+                y ="p_val_adj")
+write_csv(neut2_2kovswt, here("march", "plots", "neut_excwtb_hmgn2kovswt.csv"))
+
+```
+
+```{r eval=FALSE}
+neut_1kovswt= FindMarkers(bm_neut, ident.1 = "Neutrophils bm_hmgn1ko", ident.2 ="Neutrophils bm_wt", verbose = FALSE, assay= "SCT", recorrect_umi = FALSE )
+EnhancedVolcano(neut_2kovswt, 
+                rownames(neut_2kovswt),
+                x ="avg_log2FC", 
+                y ="p_val_adj")
+write_csv(neut_1kovswt, here("march", "plots", "neut__hmgn1kovswt.csv"))
+
+neut2_1kovswt= FindMarkers(bm_neutsubset, ident.1 = "Neutrophils bm_hmgn1ko", ident.2 ="Neutrophils bm_wt", verbose = FALSE, assay= "SCT", recorrect_umi = FALSE )
+EnhancedVolcano(neut2_1kovswt, 
+                rownames(neut2_1kovswt),
+                x ="avg_log2FC", 
+                y ="p_val_adj")
+write_csv(neut2_1kovswt, here("march", "plots", "neut_excwtb_hmgn1kovswt.csv"))
+```
+

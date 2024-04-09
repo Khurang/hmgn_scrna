@@ -1,0 +1,153 @@
+---
+title: "bm_merge clustering"
+author: "Ginni"
+date: "2024-04-01"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load packages}
+
+renv::settings$snapshot.type("all")
+options(bitmapType='cairo')
+
+here::here()
+library(dplyr)
+library(Seurat)
+library(tidyr)
+library(here)
+library(scCustomize)
+library(scater)
+library(scran)
+library(tidyverse)
+library(patchwork)
+library(viridis)
+library(ggforce)
+library(gghalves)
+library(ggridges)
+
+library(SingleR)
+library(glmGamPoi)
+library(sctransform)
+library(DoubletFinder)
+```
+
+```{r}
+bm_merge=readRDS(here("march", "objects","bm_merge.RDS"))
+
+```
+
+
+```{r add cell cycle markers}
+s.genes <- cc.genes$s.genes
+g2m.genes <- cc.genes$g2m.genes
+bm_merge= NormalizeData(bm_merge)
+bm_merge <- CellCycleScoring(bm_merge, s.features = s.genes, g2m.features = g2m.genes, set.ident = TRUE)
+
+bm_merge$CC.Difference <- bm_merge$S.Score - bm_merge$G2M.Score
+```
+
+
+```{r sctransform data (normalise, scale and find variable features)}
+bm_merge <- SCTransform(bm_merge, verbose = FALSE, conserve.memory= TRUE, vst.flavor = "v2", ncells= 5000, min_cells=1, vars.to.regress = "CC.Difference")
+bm_merge <- RunPCA(bm_merge)
+DimPlot(bm_merge, dims = c(1,2))
+```
+
+
+```{r }
+bm_merge <- RunPCA(bm_merge)
+```
+```{r }
+DimPlot(bm_merge, reduction = "pca", dims=c(1,2), split.by = "orig.ident")
+DimPlot(bm_merge, reduction = "pca", dims=c(1,10))
+ElbowPlot(bm_merge)
+```
+
+```{r }
+bm_merge <- FindNeighbors(bm_merge, dims = 1:10)
+
+```
+
+```{r clustree}
+
+res_range= seq(from=0, to=1.4, by=0.2)
+bm_merge <- Seurat::FindClusters(object = bm_merge, resolution = res_range)
+
+```
+
+```{r eval=FALSE}
+renv::install("clustree")
+library(clustree)
+clustree(bm_merge, prefix = "SCT_snn_res.", layout = "sugiyama")
+```
+
+```{r}
+
+bm_merge= FindClusters(bm_merge, resolution= 0.5)
+bm_merge <- RunUMAP(bm_merge, dims = 1:10)
+DimPlot(bm_merge, reduction ="umap", group.by = "orig.ident" )
+saveRDS(bm_merge, here("march", "objects", "bm_merge_script2neighbours.rds"))
+DimPlot(bm_merge, reduction ="umap", split.by = "orig.ident" )
+```
+
+```{r split seurat object into 2 depending on lanes} 
+bm_merge=readRDS(here("march", "objects", "bm_merge_script2neighbours.rds"))
+bm_merge1= subset(bm_merge, batch=="1")
+bm_merge2= subset(bm_merge, batch=="2")
+
+```
+
+```{r doubletfinder on bm_merge1}
+sweep.res.list_bld <- paramSweep(bm_merge1, PCs = 1:10, sct = TRUE)
+sweep.stats_bld <- summarizeSweep(sweep.res.list_bld, GT = FALSE)
+bcmvn_bld <- find.pK(sweep.stats_bld)
+## Homotypic Doublet Proportion Estimate --------------------------------------------------------------------------------
+annotations= bm_merge1@meta.data$seurat_clusters
+homotypic.prop <- modelHomotypic(annotations)       
+nExp_poi <- round(0.075*nrow(bm_merge1@meta.data))  ## Assuming 7.5% doublet formation rate - tailor for your dataset
+nExp_poi.adj <- round(nExp_poi*(1-homotypic.prop))
+
+## Run DoubletFinder with varying classification stringencies ----------------------------------------------------------------
+bm_merge1 <- doubletFinder(bm_merge1, PCs = 1:10, pN = 0.25, pK = 0.09, nExp = nExp_poi, reuse.pANN = FALSE, sct = TRUE)
+saveRDS(bm_merge1,here("march", "objects", "bm_merge1_script2withdoubletclassification.rds"))
+#bm_merge1= readRDS(here("march", "objects", "bm_merge1_script2withdoubletclassification.rds"))
+colnames(bm_merge1@meta.data)
+bm_merge1= subset(bm_merge1, DF.classifications_0.25_0.09_7788=="Singlet" )
+unique(bm_merge1@meta.data$DF.classifications_0.25_0.09_7788)
+saveRDS(bm_merge1, here("march", "objects", "bm_merge1_script2_onlysinglets.rds"))
+DimPlot(bm_merge1, reduction= "umap", split.by= "orig.ident")
+```
+
+```{r doubletfinder bm_merge2}
+
+sweep.res.list_bld <- paramSweep(bm_merge2, PCs = 1:10, sct = TRUE)
+sweep.stats_bld <- summarizeSweep(sweep.res.list_bld, GT = FALSE)
+bcmvn_bld <- find.pK(sweep.stats_bld)
+## Homotypic Doublet Proportion Estimate --------------------------------------------------------------------------------
+annotations= bm_merge2@meta.data$seurat_clusters
+homotypic.prop <- modelHomotypic(annotations)       
+nExp_poi <- round(0.075*nrow(bm_merge2@meta.data))  ## Assuming 7.5% doublet formation rate - tailor for your dataset
+nExp_poi.adj <- round(nExp_poi*(1-homotypic.prop))
+
+## Run DoubletFinder with varying classification stringencies ----------------------------------------------------------------
+bm_merge2 <- doubletFinder(bm_merge2, PCs = 1:10, pN = 0.25, pK = 0.09, nExp = nExp_poi, reuse.pANN = FALSE, sct = TRUE)
+saveRDS(bm_merge2,here("march", "objects", "bm_merge2_script2withdoubletclassification.rds"))
+colnames(bm_merge2@meta.data)
+bm_merge2= subset(bm_merge2, DF.classifications_0.25_0.09_1368=="Singlet" )
+unique(bm_merge2@meta.data$DF.classifications_0.25_0.09_1368)
+saveRDS(bm_merge2, here("march", "objects", "bm_merge2_script2_onlysinglets.rds"))
+DimPlot(bm_merge2, reduction= "umap", split.by= "orig.ident")
+```
+
+```{r}
+bm_merge2=readRDS(here("march", "objects", "bm_merge2_script2_onlysinglets.rds"))
+bm_merge1= readRDS(here("march", "objects", "bm_merge1_script2_onlysinglets.rds"))
+bm_merge= merge(bm_merge1, y=bm_merge2,merge.dr=TRUE)
+saveRDS(bm_merge, here("march", "objects", "bm_merge_script2_bm_merge1_2combined.rds"))
+
+```
+

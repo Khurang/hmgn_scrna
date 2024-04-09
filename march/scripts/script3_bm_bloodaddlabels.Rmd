@@ -1,0 +1,149 @@
+---
+title: "neutrophil subset"
+author: "Ginni"
+date: "2024-04-01"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r eval=FALSE}
+renv::install("bioc::celldex")
+```
+
+```{r load packages}
+rm(list=ls())
+renv::settings$snapshot.type("all")
+options(bitmapType='cairo')
+here::here()
+library(dplyr)
+library(Seurat)
+library(tidyr)
+library(here)
+library(scCustomize)
+library(scater)
+library(scran)
+library(tidyverse)
+library(patchwork)
+library(viridis)
+library(ggforce)
+library(gghalves)
+library(ggridges)
+
+library(SingleR)
+library(glmGamPoi)
+library(sctransform)
+```
+
+```{r proxy eval=FALSE}
+proxy <- httr::use_proxy("http://my_user:my_password@myproxy:8080")
+## or
+#proxy <- httr::use_proxy(Sys.getenv('http_proxy'))
+#httr::set_config(proxy)
+ExperimentHub::setExperimentHubOption("PROXY", proxy)
+```
+
+```{r}
+library(SingleR)
+library(celldex)
+ library(SingleCellExperiment)
+ref <- celldex::ImmGenData()
+```
+
+```{r eval=FALSE}
+bm_merge= readRDS(here("march","objects","bm_merge_script2_bm_merge1_2combined.rds"))
+```
+```{r eval=FALSE}
+results= SingleR((bm_merge[["SCT"]]$counts),  ref= ref, labels= ref$label.main)
+bm_merge$singlr_labels <- results$labels
+
+pdf(here("march","plots","bm_celldex-immunecellatlasmainlabels.pdf"), height = 30, width=30)
+p1=DimPlot(bm_merge, reduction = 'umap', group.by = 'singlr_labels', label=TRUE, label.size = 10, pt.size = 0.5) + theme(text = element_text(face = "bold"),
+        axis.text.x=element_text(angle=45, hjust=1, size=20),
+        axis.title = element_text(size=20,face="bold"),
+        axis.title.y.right = element_text(size = 20),
+        legend.text=element_text(size=20),
+        legend.title=element_text(size=30),
+        axis.line = element_line(size=1)) + NoLegend(element_line(size=10))  
+p2= DimPlot(bm_merge, reduction = 'umap', split.by = 'orig.ident', label=TRUE, label.size = 20, pt.size = 0.5) + theme(text = element_text(face = "bold"),
+        axis.text.x=element_text(angle=45, hjust=1, size=20),
+        axis.title = element_text(size=20,face="bold"),
+        axis.title.y.right = element_text(size = 20),
+        legend.text=element_text(size=20),
+        legend.title=element_text(size=20),
+        axis.line = element_line(size=1)) + NoLegend(element_line(size=20)) 
+print(p1)
+print(p2)
+dev.off()
+
+```
+```{r}
+bld_merge= readRDS(here("march", "objects", "bld_merge_script2_onlysinglets.rds"))
+```
+```{r}
+results= SingleR(as.SingleCellExperiment(bld_merge), ref= ref, labels= ref$label.main)
+bld_merge$singlr_labels <- results$labels
+
+pdf(here("march","plots","bld_celldex-immunecellatlasmainlabels.pdf"), height = 30, width=30)
+p1=DimPlot(bld_merge, reduction = 'umap', group.by = 'singlr_labels', label=TRUE, label.size = 10, pt.size = 0.5) + theme(text = element_text(face = "bold"),
+        axis.text.x=element_text(angle=45, hjust=1, size=20),
+        axis.title = element_text(size=20,face="bold"),
+        axis.title.y.right = element_text(size = 20),
+        legend.text=element_text(size=20),
+        legend.title=element_text(size=30),
+        axis.line = element_line(size=1)) + NoLegend(element_line(size=10))  
+p2= DimPlot(bld_merge, reduction = 'umap', split.by = 'orig.ident', label=TRUE, label.size = 10, pt.size = 0.5) + theme(text = element_text(face = "bold"),
+        axis.text.x=element_text(angle=45, hjust=1, size=20),
+        axis.title = element_text(size=20,face="bold"),
+        axis.title.y.right = element_text(size = 20),
+        legend.text=element_text(size=20),
+        legend.title=element_text(size=20),
+        axis.line = element_line(size=1)) + NoLegend(element_line(size=20))  
+print(p1)
+print(p2)
+dev.off()
+```
+
+```{r}
+pdf(here("march", "plots", "rfx2expression.pdf"), height=20, width=40)
+p1=FeaturePlot(bld_merge, feature="Rfx2", split.by = 'orig.ident')
+p2=VlnPlot(bld_merge, feature= "Rfx2", split.by = 'orig.ident', group.by = 'singlr_labels')  + scale_y_continuous(limits = c(0,3))
+p3=FeaturePlot(bm_merge, feature="Rfx2", split.by = 'orig.ident')
+p4=VlnPlot(bm_merge, feature= "Rfx2", group.by = 'singlr_labels', split.by = 'orig.ident') + scale_y_continuous(limits = c(0,1.7))
+print(p1)
+print(p2)
+print(p3)
+print(p4)
+dev.off()
+```
+
+```{r}
+pdf(here("march","plots","bld_celldex-immunecellatlasmainlabels_bioreplicatesplit.pdf"), height = 30, width=60)
+p1=DimPlot(bld_merge, reduction = 'umap', group.by = 'singlr_labels', label=TRUE, label.size = 10, pt.size = 0.5) + theme(text = element_text(face = "bold"),
+        axis.text.x=element_text(angle=45, hjust=1, size=20),
+        axis.title = element_text(size=20,face="bold"),
+        axis.title.y.right = element_text(size = 20),
+        legend.text=element_text(size=20),
+        legend.title=element_text(size=30),
+        axis.line = element_line(size=1)) + NoLegend(element_line(size=10))  
+p2= DimPlot(bld_merge, reduction = 'umap', split.by = 'id', label=TRUE, label.size = 10, pt.size = 0.5) + theme(text = element_text(face = "bold"),
+        axis.text.x=element_text(angle=45, hjust=1, size=20),
+        axis.title = element_text(size=20,face="bold"),
+        axis.title.y.right = element_text(size = 20),
+        legend.text=element_text(size=20),
+        legend.title=element_text(size=20),
+        axis.line = element_line(size=1)) + NoLegend(element_line(size=20))  
+print(p1)
+print(p2)
+dev.off()
+```
+
+```{r saveRDS}
+saveRDS(bld_merge, here("march", "objects", "script3-bld_merge_incsinglrlabels_allcelltypes.rds"))
+saveRDS(bm_merge, here("march", "objects", "script3-bm_merge_incsinglrlabels_allcelltypes.rds"))
+```
+
+
+

@@ -1,0 +1,124 @@
+---
+title: "blood_merge_script2_clustering"
+author: "Ginni"
+date: "2024-04-01"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r eval=FALSE}
+install.packages('renv')
+renv::init()
+renv::settings$snapshot.type("all")
+```
+```{r eval=FALSE}
+renv::install('dplyr')
+renv::install('Seurat')
+renv::install('tidyr')
+renv::install('here')
+renv::install('scCustomize')
+renv::install('bioc::scater')
+renv::install("bioc::scran")
+renv::install('bioc::tidyverse')
+renv::install('bioc::patchwork')
+renv::install('bioc::viridis')
+renv::install('bioc::ggforce')
+renv::install('bioc::gghalves')
+renv::install('bioc::ggridges')
+renv::install('bioc::SingleR')
+renv::install('bioc::glmGamPoi')
+renv::install('https://bioconductor.org/packages/3.15/bioc/src/contrib/glmGamPoi_1.8.0.tar.gz')
+renv::install('bioc::sctransform')
+renv::install('chris-mcginnis-ucsf/DoubletFinder')
+```
+
+```{r load packages}
+rm(list=ls())
+options(bitmapType='cairo')
+here::here()
+library(dplyr)
+library(Seurat)
+library(tidyr)
+library(here)
+library(scCustomize)
+library(scater)
+library(scran)
+library(tidyverse)
+library(patchwork)
+library(viridis)
+library(ggforce)
+library(gghalves)
+library(ggridges)
+
+library(SingleR)
+library(glmGamPoi)
+library(sctransform)
+library(DoubletFinder)
+```
+
+```{r}
+here::here()
+bld_merge=readRDS(here("march", "objects","bld_merge.RDS"))
+
+```
+
+
+```{r add cell cycle markers}
+s.genes <- cc.genes$s.genes
+g2m.genes <- cc.genes$g2m.genes
+bld_merge= NormalizeData(bld_merge)
+bld_merge <- CellCycleScoring(bld_merge, s.features = s.genes, g2m.features = g2m.genes, set.ident = TRUE)
+
+bld_merge$CC.Difference <- bld_merge$S.Score - bld_merge$G2M.Score
+```
+
+
+
+```{r sctransform data (normalise, scale and find variable features)}
+bld_merge <- SCTransform(bld_merge, verbose = FALSE, conserve.memory= TRUE, vst.flavor = "v2", ncells= 5000, min_cells=1, vars.to.regress = "CC.Difference")
+bld_merge <- RunPCA(bld_merge)
+DimPlot(bld_merge, dims = c(1,2))
+```
+
+```{r }
+DimPlot(bld_merge, reduction = "pca", dims=c(1,2))
+DimPlot(bld_merge, reduction = "pca", dims=c(1,10))
+ElbowPlot(bld_merge)
+```
+
+```{r }
+bld_merge <- FindNeighbors(bld_merge, dims = 1:10)
+
+```
+
+```{r}
+bld_merge= FindClusters(bld_merge, resolution= 0.5)
+bld_merge <- RunUMAP(bld_merge, dims = 1:10)
+DimPlot(bld_merge, reduction ="umap", group.by = "orig.ident" )
+saveRDS(bld_merge, here("march", "objects", "bld_merge_script2neighbours.rds"))
+DimPlot(bld_merge, reduction ="umap", split.by = "orig.ident" )
+```
+
+
+```{r doublet finder}
+bld_merge= readRDS(here("march", "objects", "bld_merge_script2neighbours.rds"))
+sweep.res.list_bld <- paramSweep(bld_merge, PCs = 1:10, sct = TRUE)
+sweep.stats_bld <- summarizeSweep(sweep.res.list_bld, GT = FALSE)
+bcmvn_bld <- find.pK(sweep.stats_bld)
+## Homotypic Doublet Proportion Estimate --------------------------------------------------------------------------------
+annotations= bld_merge@meta.data$seurat_clusters
+homotypic.prop <- modelHomotypic(annotations)       
+nExp_poi <- round(0.075*nrow(bld_merge@meta.data))  ## Assuming 7.5% doublet formation rate - tailor for your dataset
+nExp_poi.adj <- round(nExp_poi*(1-homotypic.prop))
+
+## Run DoubletFinder with varying classification stringencies ----------------------------------------------------------------
+bld_merge <- doubletFinder(bld_merge, PCs = 1:10, pN = 0.25, pK = 0.09, nExp = nExp_poi, reuse.pANN = FALSE, sct = TRUE)
+saveRDS(bld_merge,here("march", "objects", "bldmerge_script2withdoubletclassification.rds"))
+bld_merge= subset(bld_merge, DF.classifications_0.25_0.09_4213=="Singlet" )
+unique(bld_merge@meta.data$DF.classifications_0.25_0.09_4213)
+saveRDS(bld_merge, here("march", "objects", "bld_merge_script2_onlysinglets.rds"))
+DimPlot(bld_merge, reduction= "umap", split.by= "orig.idents")
+```

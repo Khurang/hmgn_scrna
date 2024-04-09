@@ -1,0 +1,80 @@
+---
+title: "script5_dotplot_bm_differentialmarkers"
+output: html_document
+date: "2024-04-09"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load packages}
+rm(list=ls())
+renv::settings$snapshot.type("all")
+options(bitmapType='cairo')
+here::here()
+library(dplyr)
+library(Seurat)
+library(tidyr)
+library(here)
+library(scCustomize)
+library(scater)
+library(scran)
+library(tidyverse)
+library(patchwork)
+library(viridis)
+library(ggforce)
+library(gghalves)
+library(ggridges)
+library(future)
+library(SingleR)
+library(glmGamPoi)
+library(sctransform)
+library(EnhancedVolcano)
+library(purrr)
+library(splitstackshape)
+```
+
+merged_df <- list.files(path = "path/to/your/files", pattern = "\\.csv$", full.names = TRUE) %>% set_names() %>% map_dfr(read_csv, .id = "file_name"
+```{r reading datatable and merging files}
+here::here()
+#here we read in the csv files and merge them
+merged_df= list.files(path= here("march", "plots", "findmarkers"), pattern= "\\.csv$", full.names=TRUE) %>% set_names() %>% map_dfr(read.csv, .id= "file_name")
+
+#here we rename the merged files
+merged_df= merged_df %>%separate(file_name, into = c("id", "file"), sep = "findmarkers/")
+merged_df= merged_df %>%separate(file, into = c("cell", "file"), sep = " bm_")
+
+```
+
+
+```{r}
+colnames(merged_df)
+merged_df= merged_df %>% filter(avg_log2FC <= "-1" | avg_log2FC>="-1") %>% filter(p_val_adj<= "0.05")
+
+```
+
+meta_summary <- meta %>%
+  group_by(seurat_clusters, Gene) %>%
+  summarise(Avg = mean(Expression),
+            Pct = sum(Expression > 0) / length(Expression) * 100)
+```{r}
+de_summary <- merged_df %>%
+  group_by(cell, file) %>%
+  summarize(num_de_genes = n())
+pdf(here("march", "plots", "differentialgenecounts_bm.pdf"), height=10, width=20)
+p1=ggplot(de_summary, aes(x = cell, y = file, size = num_de_genes, colour = num_de_genes)) +
+  geom_point() +
+  scale_size_continuous(range = c(2, 10)) +
+  scale_color_gradient(low = "blue", high = "red") +
+ theme_minimal() +
+  labs(
+    x = "Cell Type",
+    y = "Comparison",
+    size = "Number of Differentially\nExpressed Genes", colour= "Number of Differentially\nExpressed Genes"
+  )
+print(p1)
+dev.off()
+
+```
+
