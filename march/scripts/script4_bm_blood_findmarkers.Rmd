@@ -190,7 +190,7 @@ bld_merge= readRDS(here("march", "objects", "script3-bld_merge_incsinglrlabels_a
 ```
 
 
-```{r iterate over celltypes blood}4
+```{r iterate over celltypes blood}
 #get celltypes list
 celltypes= bld_merge@meta.data$singlr_labels
 celltypes= unique(celltypes)
