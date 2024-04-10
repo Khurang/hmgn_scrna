@@ -1,13 +1,10 @@
----
 title: "script5_dotplot_bm_differentialmarkers"
 output: html_document
 date: "2024-04-09"
 ---
-
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
-
 ```{r load packages}
 rm(list=ls())
 renv::settings$snapshot.type("all")
@@ -33,32 +30,27 @@ library(sctransform)
 library(EnhancedVolcano)
 library(purrr)
 library(splitstackshape)
+library(ggVennDiagram)
 ```
-
 merged_df <- list.files(path = "path/to/your/files", pattern = "\\.csv$", full.names = TRUE) %>% set_names() %>% map_dfr(read_csv, .id = "file_name"
 ```{r reading datatable and merging files}
 here::here()
 #here we read in the csv files and merge them
 merged_df= list.files(path= here("march", "plots", "findmarkers"), pattern= "\\.csv$", full.names=TRUE) %>% set_names() %>% map_dfr(read.csv, .id= "file_name")
-
 #here we rename the merged files
 merged_df= merged_df %>%separate(file_name, into = c("id", "file"), sep = "findmarkers/")
 merged_df= merged_df %>%separate(file, into = c("cell", "file"), sep = " bm_")
-
 ```
 
-
-```{r}
+```{r filter out degs}
 colnames(merged_df)
 merged_df= merged_df %>% filter(avg_log2FC <= "-1" | avg_log2FC>="-1") %>% filter(p_val_adj<= "0.05")
-
 ```
-
 meta_summary <- meta %>%
   group_by(seurat_clusters, Gene) %>%
   summarise(Avg = mean(Expression),
             Pct = sum(Expression > 0) / length(Expression) * 100)
-```{r}
+```{r summarise for dotplots}
 de_summary <- merged_df %>%
   group_by(cell, file) %>%
   summarize(num_de_genes = n())
@@ -75,6 +67,47 @@ p1=ggplot(de_summary, aes(x = cell, y = file, size = num_de_genes, colour = num_
   )
 print(p1)
 dev.off()
-
 ```
+
+```{r venn diagram plots}
+cells = unique(merged_df$cell)
+venn_list = list()
+for (i in cells) {
+  a= print(i)
+  df = merged_df %>% filter(cell == a)
+  hmgn12ko_vs_wt = df %>% filter(file == "hmgn12kovs_bm_wt.csv") %>% pull(X)
+  hmgn1ko_vs_wt = df %>% filter(file == "hmgn1kovs_bm_wt.csv") %>% pull(X)
+  hmgn2ko_vs_wt = df %>% filter(file == "hmgn2kovs_bm_wt.csv") %>% pull(X)
+  my_list = list(
+    hmgn12ko_vs_wt = hmgn12ko_vs_wt,
+    hmgn1ko_vs_wt = hmgn1ko_vs_wt,
+    hmgn2ko_vs_wt = hmgn2ko_vs_wt
+  )
+ venn <- ggVennDiagram(my_list,
+                                  category_names = c("hmgn12ko_vs_wt", "hmgn1ko_vs_wt", "hmgn2ko_vs_wt"),set_size = 25,
+                #title = paste("Venn Diagram for", a),
+                font_size = 30,
+                show_percentage = TRUE,
+                opacity = 0.8,
+                label_offset = 0.06,
+                label_size = 20) +  scale_fill_distiller(palette = "Reds", direction = 1)
+  venn= venn +
+   + ggtitle(label = paste("Venn Diagram for", a))
+  venn_list[[a]]= venn
+}
+pdf(here("march", "plots", "findmarkers", "venn_diags.pdf"), height = 50, width = 50)
+for (cell in names(venn_list)) {
+  print(venn_list[[cell]])
+}
+dev.off()
+```
+```{r eval=FALSE}
+  hmgn12ko_vs_wt= merged_df %>% filter(cell== cell, file== "hmgn12kovs_bm_wt.csv") %>% pull(X) %>% as.list()
+   hmgn1ko_vs_wt= merged_df %>% filter(cell== cell, file== "hmgn1kovs_bm_wt.csv") %>% pull(X) %>% as.list()
+    hmgn2ko_vs_wt= merged_df %>% filter(cell==cell, file== "hmgn2kovs_bm_wt.csv") %>% pull(X) %>% as.list()
+   my_list= list(hmgn12ko_vs_wt=hmgn12ko_vs_wt,hmgn1ko_vs_wt=hmgn1ko_vs_wt,hmgn2ko_vs_wt=hmgn2ko_vs_wt )
+   ggVennDiagram(my_list, f)
+```
+
+
 
